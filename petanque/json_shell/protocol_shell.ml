@@ -62,3 +62,30 @@ module TableOfContents = struct
         }
   end
 end
+
+(** [document_declarations { uri } ] returns the declarations represented by
+    the checked document.  Unlike the historical leaf-keyed [toc] map, this
+    response is an ordered list and therefore preserves duplicate leaves in
+    distinct module paths. *)
+module DocumentDeclarations = struct
+  let method_ = "petanque/document_declarations"
+
+  module Params = struct
+    type t = { uri : Lsp.JLang.LUri.File.t } [@@deriving yojson]
+  end
+
+  module Response = struct
+    type t = Document_declaration.t list [@@deriving yojson]
+  end
+
+  module Handler = struct
+    module Params = Params
+    module Response = Response
+
+    let handler =
+      Protocol.HType.FullDoc
+        { uri_fn = (fun { Params.uri } -> uri)
+        ; handler = (fun ~token ~doc _ -> Shell.get_declarations ~token ~doc)
+        }
+  end
+end

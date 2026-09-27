@@ -32,3 +32,8 @@ val get_toc :
      token:Coq.Limits.Token.t
   -> doc:Fleche.Doc.t
   -> (string * Lang.Ast.Info.t list option) list Agent.R.t
+
+val get_declarations :
+     token:Coq.Limits.Token.t
+  -> doc:Fleche.Doc.t
+  -> Document_declaration.t list Agent.R.t

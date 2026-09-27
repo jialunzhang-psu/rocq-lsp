@@ -27,6 +27,10 @@ module S (C : Chans) : sig
   val toc :
     TableOfContents.Params.t -> (TableOfContents.Response.t, string) result
 
+  val document_declarations :
+    DocumentDeclarations.Params.t ->
+    (DocumentDeclarations.Response.t, string) result
+
   val get_root_state :
     GetRootState.Params.t -> (GetRootState.Response.t, string) result
 

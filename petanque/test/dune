@@ -27,3 +27,14 @@
  (enabled_if
   (<> %{os_type} "Win32"))
  (libraries petanque petanque_shell fleche_lsp))
+
+(test
+ (name document_declarations)
+ (modules document_declarations)
+ (deps
+  (package coq-lsp)
+  document_declarations.v
+  %{bin:pet})
+ (enabled_if
+  (<> %{os_type} "Win32"))
+ (libraries petanque petanque_shell fleche_lsp))

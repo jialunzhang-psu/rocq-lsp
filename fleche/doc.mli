@@ -108,6 +108,11 @@ val asts : t -> Node.Ast.t list
 (** Return the lines for conversion in request *)
 val lines : t -> string Array.t
 
+(** Return the original source text covered by a checked document range.  The
+    range is produced by Flèche/PET and offsets are byte offsets in the
+    document text. *)
+val extract_raw : t -> range:Lang.Range.t -> string
+
 (** Return the list of all diags in the doc *)
 val diags : t -> Coq.Pp_t.t Lang.Diagnostic.t list
 

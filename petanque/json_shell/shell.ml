@@ -1,5 +1,7 @@
 module SM = Lang.Compat.String.Map
 
+open Vernacexpr
+
 let init_coq ~debug ~record_comments =
   let load_module = Dynlink.loadfile in
   let load_plugin = Coq.Loader.plugin_handler None in
@@ -121,3 +123,127 @@ let get_toc ~token:_ ~(doc : Fleche.Doc.t) :
   let { Fleche.Doc.toc; _ } = doc in
   let toc = SM.bindings toc |> List.filter_map toc_to_info in
   Ok toc
+
+(* The old [toc] is a String.Map keyed by leaf name.  That representation
+   cannot express [A.foo] and [B.foo] simultaneously.  Build the document
+   response from Flèche's checked AST sequence instead: the sequence retains
+   source order and PET owns both declaration ranges and module transitions.
+   This is deliberately a document pass, not a sentence-at-a-time RPC loop. *)
+module Declaration_scope = struct
+  type t = Module of string | Section of string
+
+  let modules scopes =
+    scopes
+    |> List.filter_map (function Module name -> Some name | Section _ -> None)
+    |> List.rev
+end
+
+let lident_name (id : Names.lident) = Names.Id.to_string id.CAst.v
+
+let lname_name (id : Names.lname) =
+  match id.CAst.v with
+  | Names.Anonymous -> None
+  | Names.Name id -> Some (Names.Id.to_string id)
+
+let option_to_list = function None -> [] | Some value -> [ value ]
+
+let command_of_ast (ast : Coq.Ast.t) =
+  let control = Coq.Ast.to_coq ast in
+  let CAst.{ v = { Vernacexpr.expr; _ }; _ } = control in
+  expr
+
+let names_for_info command (info : Lang.Ast.Info.t) =
+  match command with
+  | VernacSynPure (VernacStartTheoremProof (_, proofs)) ->
+    let names =
+      List.map (fun ((id, _), _) -> lident_name id) proofs
+    in
+    if names = [] then option_to_list info.name.v else names
+  | VernacSynPure (VernacDefinition (_, (name, _), _)) ->
+    option_to_list (lname_name name)
+  | _ -> option_to_list info.name.v
+
+let scope_transition command =
+  match command with
+  | VernacSynterp (VernacDefineModule (_, name, _, _, body))
+    when body = [] -> Some (`Open (Declaration_scope.Module (lident_name name)))
+  | VernacSynterp (VernacDeclareModuleType (name, _, _, body))
+    when body = [] ->
+    Some (`Open (Declaration_scope.Module (lident_name name)))
+  | VernacSynterp (VernacBeginSection name) ->
+    Some (`Open (Declaration_scope.Section (lident_name name)))
+  | VernacSynterp (VernacEndSegment name) -> Some (`Close (lident_name name))
+  | _ -> None
+
+let declaration_kind detail =
+  match detail with
+  | "Theorem" | "Lemma" | "Fact" | "Remark" | "Corollary" | "Proposition"
+    | "Definition" -> Some detail
+  | _ -> None
+
+let normalize_statement source =
+  let source = String.trim source in
+  let length = String.length source in
+  if length > 0 && Char.equal source.[length - 1] '.' then
+    String.sub source 0 (length - 1) |> String.trim
+  else source
+
+let declaration_records ~(doc : Fleche.Doc.t) scopes ast =
+  let { Fleche.Doc.Node.Ast.v; ast_info } = ast in
+  let ast_info = match ast_info with None -> [] | Some infos -> infos in
+  let range =
+    let loc = Coq.Ast.loc v |> Option.get in
+    Coq.Utils.to_range ~lines:(Fleche.Doc.lines doc) loc
+  in
+  let statement =
+    Fleche.Doc.extract_raw doc ~range |> normalize_statement
+  in
+  let qualified_prefix = Declaration_scope.modules scopes in
+  List.concat_map
+    (fun (info : Lang.Ast.Info.t) ->
+      match info.name.v, Option.bind info.detail declaration_kind with
+      | Some _, None -> []
+      | None, _ -> []
+      | Some _, Some kind ->
+        names_for_info (command_of_ast v) info
+        |> List.map (fun name ->
+               Document_declaration.
+                 { qualified_path = qualified_prefix @ [ name ]
+                 ; kind
+                 ; range =
+                     { Document_declaration.start = range.start.offset
+                     ; end_ = range.end_.offset
+                     }
+                 ; statement
+                 }))
+    ast_info
+
+let get_declarations ~token:_ ~(doc : Fleche.Doc.t) :
+    Document_declaration.t list Petanque.Agent.R.t =
+  let scopes = ref [] in
+  let declarations = ref [] in
+  let asts = Fleche.Doc.asts doc in
+  let fail message =
+    Error Petanque.Agent.Error.(make_request (coq message))
+  in
+  let rec visit = function
+    | [] -> Ok (List.rev !declarations)
+    | ({ Fleche.Doc.Node.Ast.v; _ } as ast) :: rest ->
+      let command = command_of_ast v in
+      declarations :=
+        List.rev_append (declaration_records ~doc !scopes ast) !declarations;
+      (match scope_transition command with
+      | None -> visit rest
+      | Some (`Open scope) ->
+        scopes := scope :: !scopes;
+        visit rest
+      | Some (`Close name) -> (
+        match !scopes with
+        | Declaration_scope.Module open_name :: tail
+        | Declaration_scope.Section open_name :: tail
+          when String.equal open_name name ->
+          scopes := tail;
+          visit rest
+        | _ -> fail "PET document scope closes out of order"))
+  in
+  visit asts

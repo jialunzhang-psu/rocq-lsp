@@ -91,6 +91,10 @@ module S (C : Chans) = struct
     let module M = Wrap (TableOfContents) (C) in
     M.call
 
+  let document_declarations =
+    let module M = Wrap (DocumentDeclarations) (C) in
+    M.call
+
   (* Standard calls *)
   let get_root_state =
     let module M = Wrap (GetRootState) (C) in

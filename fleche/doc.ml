@@ -325,6 +325,7 @@ type t =
 let asts doc = List.filter_map Node.ast doc.nodes
 let diags doc = List.concat_map Node.diags doc.nodes
 let lines doc = doc.contents.lines
+let extract_raw doc ~range = Contents.extract_raw ~contents:doc.contents ~range
 
 (* TOC handling *)
 let rec add_toc_info node toc { Lang.Ast.Info.name; children; _ } =
