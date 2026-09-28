@@ -42,6 +42,7 @@ let of_execution (v : (_, _) Coq.Protect.E.t) =
     match r with
     | Coq.Protect.R.Completed (Ok goals) -> Some goals
     | Coq.Protect.R.Completed (Error (Anomaly { msg = _; _ }))
+    | Coq.Protect.R.Completed (Error (Reference_not_found { msg = _; _ }))
     | Coq.Protect.R.Completed (Error (User { msg = _; _ })) -> None
     | Coq.Protect.R.Interrupted -> None)
 

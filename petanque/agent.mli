@@ -50,6 +50,7 @@ module Error : sig
     | Interrupted
     | Parsing of string
     | Coq of string
+    | Reference_not_found of string
     | Anomaly of string
     | System of string
     | Theorem_not_found of string

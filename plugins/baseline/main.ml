@@ -93,6 +93,8 @@ let apply_tac ~token ~tac { Common.ThmDecl.names; node } =
       (st, (derror, msg) :: feedback)
     | Coq.Protect.E.{ r = Completed (Error (User { range; msg; _ })); feedback }
     | Coq.Protect.E.
+        { r = Completed (Error (Reference_not_found { range; msg; _ })); feedback }
+    | Coq.Protect.E.
         { r = Completed (Error (Anomaly { range; msg; _ })); feedback } ->
       let msg = { Coq.Message.Payload.range; msg; quickFix = None } in
       (st, (derror, msg) :: feedback)

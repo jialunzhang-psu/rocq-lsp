@@ -137,6 +137,22 @@ let get_proof_test ~token ~doc =
   assert (String.equal (Option.get pi).name "rev_snoc_cons");
   Ok None
 
+let reference_not_found_test ~token ~doc =
+  let open Coq.Compat.Result.O in
+  let* { st; _ } = Agent.start ~token ~doc ~thm:"rev_snoc_cons" () in
+  match Agent.run ~token ~st ~tac:"Search pt_generated." () with
+  | Error Request.Error.{ code; payload = Agent.Error.Reference_not_found msg; _ }
+    ->
+    assert (Int.equal code (-32008));
+    assert (String.length msg > 0);
+    Ok None
+  | Error Request.Error.{ payload; _ } ->
+    Error (Agent.Error.make_request (System (Agent.Error.to_string payload)))
+  | Ok _ ->
+    Error
+      (Agent.Error.make_request
+         (System "missing Search reference unexpectedly succeeded"))
+
 let main () =
   let open Coq.Compat.Result.O in
   let token = Coq.Limits.create_atomic () in
@@ -147,7 +163,8 @@ let main () =
   let* g4 = fake_start_test ~token ~doc in
   let* g5 = run_at_pos_test ~token ~doc in
   let* g6 = get_proof_test ~token ~doc in
-  Ok [ g1; g2; g3; g4; g5; g6 ]
+  let* g7 = reference_not_found_test ~token ~doc in
+  Ok [ g1; g2; g3; g4; g5; g6; g7 ]
 
 let max = List.fold_left max min_int
 

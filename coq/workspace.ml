@@ -393,6 +393,7 @@ let guess ~token ?(add_root = false) ~debug ~cmdline ~dir () =
   match r with
   | Protect.R.Interrupted -> Error "Workspace Scanning Interrupted"
   | Protect.R.Completed (Error (User { msg; _ }))
+  | Protect.R.Completed (Error (Reference_not_found { msg; _ }))
   | Protect.R.Completed (Error (Anomaly { msg; _ })) ->
     Error (Format.asprintf "Workspace Scanning Errored: %a" Pp.pp_with msg)
   | Protect.R.Completed (Ok workspace) -> Ok workspace

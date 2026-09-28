@@ -165,6 +165,7 @@ module Capabilities = struct
             ; "refresh_workspace_v1"
             ; "state_count_v1"
             ; "structured_assumptions_v1"
+            ; "typed_errors_v1"
             ])
   end
 end

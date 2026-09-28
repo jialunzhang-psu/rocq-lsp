@@ -54,6 +54,7 @@ module Error = struct
     | Interrupted
     | Parsing of string
     | Coq of string
+    | Reference_not_found of string
     | Anomaly of string
     | System of string
     | Theorem_not_found of string
@@ -63,6 +64,8 @@ module Error = struct
     | Interrupted -> Format.asprintf "Interrupted"
     | Parsing msg -> Format.asprintf "Parsing: %s" msg
     | Coq msg -> Format.asprintf "Coq: %s" msg
+    | Reference_not_found msg ->
+      Format.asprintf "Reference_not_found: %s" msg
     | Anomaly msg -> Format.asprintf "Anomaly: %s" msg
     | System msg -> Format.asprintf "System: %s" msg
     | Theorem_not_found msg -> Format.asprintf "Theorem_not_found: %s" msg
@@ -77,6 +80,7 @@ module Error = struct
     | System _ -> -32005
     | Theorem_not_found _ -> -32006
     | No_node_at_point -> -32007
+    | Reference_not_found _ -> -32008
 
   let coq e = Coq e
   let system e = System e
@@ -151,6 +155,10 @@ let protect_to_result (r : _ Coq.Protect.E.t) : (_, _) Result.t =
   | { r = Completed (Error (User { msg; _ })); feedback } ->
     let feedback = clean_fb feedback in
     Error Error.(make (Coq (Coq.Pp_t.to_string msg)) ~feedback)
+  | { r = Completed (Error (Reference_not_found { msg; _ })); feedback } ->
+    let feedback = clean_fb feedback in
+    Error
+      Error.(make (Reference_not_found (Coq.Pp_t.to_string msg)) ~feedback)
   | { r = Completed (Error (Anomaly { msg; _ })); feedback } ->
     let feedback = clean_fb feedback in
     Error Error.(make (Anomaly (Coq.Pp_t.to_string msg)) ~feedback)

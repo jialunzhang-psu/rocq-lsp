@@ -15,6 +15,7 @@ let _of_execution ~io ~what (v : (_, _) Coq.Protect.E.t) =
     match r with
     | Coq.Protect.R.Completed (Ok goals) -> goals
     | Coq.Protect.R.Completed (Error (Anomaly { msg; _ }))
+    | Coq.Protect.R.Completed (Error (Reference_not_found { msg; _ }))
     | Coq.Protect.R.Completed (Error (User { msg; _ })) ->
       let lvl = Io.Level.Error in
       Io.Report.msg ~io ~lvl "error when retrieving %s: %a" what Pp.pp_with msg;

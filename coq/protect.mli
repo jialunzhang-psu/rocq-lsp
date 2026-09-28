@@ -16,6 +16,7 @@
 module Error : sig
   type 'l t = private
     | User of 'l Message.Payload.t
+    | Reference_not_found of 'l Message.Payload.t
     | Anomaly of 'l Message.Payload.t
 end
 

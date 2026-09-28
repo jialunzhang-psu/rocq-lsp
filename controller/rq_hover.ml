@@ -425,7 +425,11 @@ module Pr_vernac : HoverProvider = struct
       | Coq.Protect.{ E.r = R.Completed (Ok pr_ast); feedback = _ } ->
         Some Coq.Pp_t.(to_string (str "pr_vernac: " ++ pr_ast))
       | Coq.Protect.
-          { E.r = R.Completed (Error (User msg | Anomaly msg)); feedback = _ }
+          { E.r =
+              R.Completed
+                (Error (User msg | Reference_not_found msg | Anomaly msg))
+          ; feedback = _
+          }
         -> Some Coq.Pp_t.(to_string (str "Error in pr_vernac: " ++ msg.msg))
       | _ -> None
     in

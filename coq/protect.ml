@@ -11,10 +11,12 @@
 module Error = struct
   type 'l t =
     | User of 'l Message.Payload.t
+    | Reference_not_found of 'l Message.Payload.t
     | Anomaly of 'l Message.Payload.t
 
   let map ~f = function
     | User e -> User (f e)
+    | Reference_not_found e -> Reference_not_found (f e)
     | Anomaly e -> Anomaly (f e)
 end
 
@@ -73,8 +75,14 @@ let eval_exn ~token ~f x =
     in
     let payload = Message.Payload.make ?range ?quickFix msg in
     Vernacstate.Interp.invalidate_cache ();
-    if CErrors.is_anomaly e then R.Completed (Error (Anomaly payload))
-    else R.Completed (Error (User payload))
+    (* Design note: preserve this structural Rocq exception until PET maps it
+       to a stable protocol error. Rendering it as text here would make a
+       missing name indistinguishable from every other user command failure. *)
+    match e with
+    | Nametab.GlobalizationError _ ->
+      R.Completed (Error (Reference_not_found payload))
+    | _ when CErrors.is_anomaly e -> R.Completed (Error (Anomaly payload))
+    | _ -> R.Completed (Error (User payload))
 
 let _bind_exn ~f x =
   match x with

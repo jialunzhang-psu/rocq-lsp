@@ -55,6 +55,7 @@ let do_save_vof ~io ~token ~doc =
     Io.Log.feedback "vof safe" feedback;
     Io.Report.msg ~io ~lvl:Info "vof file saved"
   | Coq.Protect.E.{ r = Completed (Error (User msg)); feedback }
+  | Coq.Protect.E.{ r = Completed (Error (Reference_not_found msg)); feedback }
   | Coq.Protect.E.{ r = Completed (Error (Anomaly msg)); feedback } ->
     Io.Log.feedback "vof safe" feedback;
     Io.Report.msg ~io ~lvl:Error "error saving vof file %a" Coq.Pp_t.pp_with

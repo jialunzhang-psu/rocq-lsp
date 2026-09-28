@@ -449,6 +449,8 @@ let handle_doc_creation_exec ~token ~env ~uri ~languageId ~version ~contents =
       let range = None in
       error_doc ~range ~message ~uri ~languageId ~version ~contents ~env
     | Completed (Error (User { range; msg = err_msg; quickFix = _ }))
+    | Completed
+        (Error (Reference_not_found { range; msg = err_msg; quickFix = _ }))
     | Completed (Error (Anomaly { range; msg = err_msg; quickFix = _ })) ->
       let message =
         Format.asprintf "Doc.create, internal error: @[%a@]" Coq.Pp_t.pp_with
@@ -858,6 +860,7 @@ let parse_action ~token ~lines ~st last_tok doc_handle =
       let () = if Debug.parsing then DDebug.parsed_sentence ~ast in
       (Process ast, [], feedback, time)
     | Error (Anomaly { range = _; quickFix; msg })
+    | Error (Reference_not_found { range = None; quickFix; msg })
     | Error (User { range = None; quickFix; msg }) ->
       (* We don't have a better alternative :(, usually missing error loc here
          means an anomaly, so we stop *)
@@ -866,6 +869,7 @@ let parse_action ~token ~lines ~st last_tok doc_handle =
         [ Diags.error ~err_range ~quickFix ~msg ~stm_range:err_range () ]
       in
       (EOF (Failed last_tok), parse_diags, feedback, time)
+    | Error (Reference_not_found { range = Some err_range; quickFix; msg })
     | Error (User { range = Some err_range; quickFix; msg }) ->
       Coq.Parsing.discard_to_dot doc_handle;
       let last_tok = Coq.Parsing.Parsable.loc doc_handle in
@@ -919,6 +923,7 @@ let parsed_node ~range ~prev ~ast ~state ~parsing_diags ~parsing_feedback ~diags
 
 let strategy_of_coq_err ~node ~state ~last_tok = function
   | Coq.Protect.Error.Anomaly _ -> Stop (Failed last_tok, node)
+  | Reference_not_found _ -> Continue { state; last_tok; node }
   | User _ -> Continue { state; last_tok; node }
 
 let node_of_coq_result ~token ~doc ~range ~prev ~ast ~st ~parsing_diags
@@ -932,6 +937,8 @@ let node_of_coq_result ~token ~doc ~range ~prev ~ast ~st ~parsing_diags
     Continue { state; last_tok; node }
   | Error
       (Coq.Protect.Error.Anomaly { range = err_range; quickFix; msg } as coq_err)
+  | Error
+      (Reference_not_found { range = err_range; quickFix; msg } as coq_err)
   | Error (User { range = err_range; quickFix; msg } as coq_err) ->
     let err_range = Stdlib.Option.value ~default:range err_range in
     let err_diags =
