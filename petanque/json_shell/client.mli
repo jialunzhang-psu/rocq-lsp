@@ -31,6 +31,21 @@ module S (C : Chans) : sig
     DocumentDeclarations.Params.t ->
     (DocumentDeclarations.Response.t, string) result
 
+  val insertion_point :
+    InsertionPoint.Params.t -> (InsertionPoint.Response.t, string) result
+
+  val capabilities :
+    Capabilities.Params.t -> (Capabilities.Response.t, string) result
+
+  val release_states :
+    ReleaseStates.Params.t -> (ReleaseStates.Response.t, string) result
+
+  val state_count :
+    StateCount.Params.t -> (StateCount.Response.t, string) result
+
+  val refresh_workspace :
+    RefreshWorkspace.Params.t -> (RefreshWorkspace.Response.t, string) result
+
   val get_root_state :
     GetRootState.Params.t -> (GetRootState.Response.t, string) result
 

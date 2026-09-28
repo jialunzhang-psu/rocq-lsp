@@ -95,6 +95,26 @@ module S (C : Chans) = struct
     let module M = Wrap (DocumentDeclarations) (C) in
     M.call
 
+  let insertion_point =
+    let module M = Wrap (InsertionPoint) (C) in
+    M.call
+
+  let capabilities =
+    let module M = Wrap (Capabilities) (C) in
+    M.call
+
+  let release_states =
+    let module M = Wrap (ReleaseStates) (C) in
+    M.call
+
+  let state_count =
+    let module M = Wrap (StateCount) (C) in
+    M.call
+
+  let refresh_workspace =
+    let module M = Wrap (RefreshWorkspace) (C) in
+    M.call
+
   (* Standard calls *)
   let get_root_state =
     let module M = Wrap (GetRootState) (C) in

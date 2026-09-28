@@ -32,7 +32,7 @@ let run (ic, oc) =
   (* Will this work on Windows? *)
   let root, uri = prepare_paths () in
   let opts = None in
-  let* _env = S.set_workspace { debug; root } in
+  let* _env = S.set_workspace { debug; root; load_paths = [] } in
   let* { st; _ } =
     S.start { uri; opts; pre_commands = None; thm = "rev_snoc_cons" }
   in

@@ -39,8 +39,8 @@ let init ~token =
   in
   (* Twice to test for #766 *)
   let root, uri = prepare_paths () in
-  let* () = Shell.set_workspace ~token ~debug ~root in
-  let* () = Shell.set_workspace ~token ~debug ~root in
+  let* () = Shell.set_workspace ~token ~debug ~root ~load_paths:[] in
+  let* () = Shell.set_workspace ~token ~debug ~root ~load_paths:[] in
   (* Careful to call [build_doc] before we have set an environment! [pet] and
      [pet-server] are careful to always set a default one *)
   Shell.build_doc ~token ~uri

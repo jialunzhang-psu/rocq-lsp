@@ -89,7 +89,7 @@ let run (ic, oc) =
   in
   (* Will this work on Windows? *)
   let root, uri = prepare_paths () in
-  let* () = S.set_workspace { debug; root } in
+  let* () = S.set_workspace { debug; root; load_paths = [] } in
   (* Test for run_at_pos *)
   let* { Petanque.Agent.Run_result.feedback; _ } =
     (* harcoded in shell.ml *)

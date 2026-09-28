@@ -165,6 +165,12 @@ val goals :
   -> unit
   -> (string, string) Coq.Goals.reified option R.t
 
+(** PET-owned caches of source and [.glob] file contents.  A workspace
+    refresh must clear them after build/source mutation. *)
+module Memo : sig
+  val clear : unit -> unit
+end
+
 module Premise : sig
   module Info : sig
     (* (from .glob files) *)

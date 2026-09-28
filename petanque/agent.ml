@@ -330,6 +330,12 @@ module Memo = struct
         let res = Error "source file is not available" in
         H.add table_source file res;
         res
+
+  (** Drop only PET's filesystem-derived memo tables.  Fleche owns its own
+      semantic caches and refreshes them separately. *)
+  let clear () =
+    H.clear table_glob;
+    H.clear table_source
 end
 
 let info_of ~glob ~name =

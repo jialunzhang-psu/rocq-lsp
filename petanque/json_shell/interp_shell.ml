@@ -40,6 +40,16 @@ let request ~fn ~token ~id ~method_ ~params =
       do_handle ~fn ~token (do_request (module TableOfContents) ~params)
     | s when String.equal DocumentDeclarations.method_ s ->
       do_handle ~fn ~token (do_request (module DocumentDeclarations) ~params)
+    | s when String.equal InsertionPoint.method_ s ->
+      do_handle ~fn ~token (do_request (module InsertionPoint) ~params)
+    | s when String.equal Capabilities.method_ s ->
+      do_handle ~fn ~token (do_request (module Capabilities) ~params)
+    | s when String.equal ReleaseStates.method_ s ->
+      do_handle ~fn ~token (do_request (module ReleaseStates) ~params)
+    | s when String.equal StateCount.method_ s ->
+      do_handle ~fn ~token (do_request (module StateCount) ~params)
+    | s when String.equal RefreshWorkspace.method_ s ->
+      do_handle ~fn ~token (do_request (module RefreshWorkspace) ~params)
     | _ ->
       (* JSON-RPC method not found *)
       let code = -32601 in
