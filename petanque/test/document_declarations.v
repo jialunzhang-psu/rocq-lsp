@@ -32,5 +32,12 @@ Remark section_leaf : True. exact I. Qed.
 End S.
 
 Axiom permitted_axiom : True.
+Axiom dependency_with_a_name_long_enough_to_wrap_in_human_readable_output :
+  forall (P : Prop) (K : Type) (x y z : nat), P -> P.
+Theorem uses_long_dependency :
+  forall (P : Prop) (K : Type) (x y z : nat), P -> P.
+Proof.
+  exact dependency_with_a_name_long_enough_to_wrap_in_human_readable_output.
+Qed.
 Theorem admitted_leaf : True. Admitted.
 Theorem aborted_leaf : True. Abort.

@@ -290,6 +290,119 @@ module Premise = struct
     }
 end
 
+module Assumption = struct
+  (** Semantic class of one global-context dependency. [Axiom] is the only class
+      that can denote an ordinary source declaration; every other class records
+      a kernel or environment assumption that a trust policy must handle
+      explicitly. *)
+  type kind =
+    | Axiom
+    | Positive
+    | Guarded
+    | Type_in_type
+    | Uip
+    | Section_variable
+    | Opaque
+    | Transparent
+
+  type t =
+    { kind : kind
+    ; qualified_path : string list
+          (** Absolute name components from Rocq's name table. *)
+    }
+
+  type theory =
+    { rewrite_rules : bool
+    ; impredicative_set : bool
+    ; type_in_type : bool
+    }
+
+  type report =
+    { assumptions : t list
+    ; theory : theory
+    }
+end
+
+(* Design note: [path_of_global] exposes the absolute name-table identity that
+   document declarations use. Do not substitute a pretty-printer here: its
+   layout and qualification are presentation settings, not protocol data. *)
+let qualified_path_of_global reference =
+  let path = Nametab.path_of_global reference in
+  let dirpath, basename = Libnames.repr_path path in
+  List.rev_map Names.Id.to_string (Names.DirPath.repr dirpath)
+  @ [ Names.Id.to_string basename ]
+
+let assumption_of_context_object =
+  let global kind reference =
+    Assumption.{ kind; qualified_path = qualified_path_of_global reference }
+  in
+  function
+  | Printer.Variable id ->
+    Assumption.
+      { kind = Section_variable; qualified_path = [ Names.Id.to_string id ] }
+  | Printer.Axiom (axiom, _) -> (
+    match axiom with
+    | Printer.Constant constant ->
+      global Assumption.Axiom (Names.GlobRef.ConstRef constant)
+    | Printer.Positive mind ->
+      global Assumption.Positive (Names.GlobRef.IndRef (mind, 0))
+    | Printer.Guarded reference -> global Assumption.Guarded reference
+    | Printer.TypeInType reference -> global Assumption.Type_in_type reference
+    | Printer.UIP mind -> global Assumption.Uip (Names.GlobRef.IndRef (mind, 0))
+    )
+  | Printer.Opaque constant ->
+    global Assumption.Opaque (Names.GlobRef.ConstRef constant)
+  | Printer.Transparent constant ->
+    global Assumption.Transparent (Names.GlobRef.ConstRef constant)
+
+let qualid_of_qualified_path = function
+  | [] -> CErrors.user_err Pp.(str "assumption target path is empty")
+  | path ->
+    let basename, reversed_dirpath =
+      match List.rev path with
+      | basename :: reversed_dirpath -> (basename, reversed_dirpath)
+      | [] -> assert false
+    in
+    let basename = Names.Id.of_string basename in
+    let dirpath =
+      reversed_dirpath |> List.map Names.Id.of_string |> Names.DirPath.make
+    in
+    Libnames.make_qualid dirpath basename
+
+(* RISK: Rocq 9.1 exposes opaque proof loading to non-vernacular callers only
+   through this deprecated accessor. A future Rocq upgrade must migrate this
+   endpoint to that version's state-threaded opaque-access API. *)
+let opaque_access = Library.indirect_accessor [@@warning "-3"]
+
+let assumptions_in_current_state qualified_path =
+  let reference =
+    qualified_path |> qualid_of_qualified_path |> Nametab.locate
+  in
+  let env = Global.env () in
+  let term, _ = UnivGen.fresh_global_instance env reference in
+  let transparency = Conv_oracle.get_transp_state (Environ.oracle env) in
+  let context =
+    Assumptions.assumptions opaque_access transparency reference term
+  in
+  let assumptions =
+    Printer.ContextObjectMap.fold
+      (fun object_ _ result -> assumption_of_context_object object_ :: result)
+      context []
+    |> List.rev
+  in
+  let theory =
+    Assumption.
+      { rewrite_rules = Environ.rewrite_rules_allowed env
+      ; impredicative_set = Environ.is_impredicative_set env
+      ; type_in_type = Environ.type_in_type env
+      }
+  in
+  fun _feedback -> Assumption.{ assumptions; theory }
+
+let assumptions ~token ~st ~qualified_path =
+  Coq.State.in_state ~token ~st ~f:assumptions_in_current_state qualified_path
+  |> protect_to_result
+
 (* We need some caching here otherwise it is very expensive to re-parse the glob
    files all the time.
 
@@ -331,7 +444,7 @@ module Memo = struct
         H.add table_source file res;
         res
 
-  (** Drop only PET's filesystem-derived memo tables.  Fleche owns its own
+  (** Drop only PET's filesystem-derived memo tables. Fleche owns its own
       semantic caches and refreshes them separately. *)
   let clear () =
     H.clear table_glob;

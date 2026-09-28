@@ -306,6 +306,42 @@ module Premises = struct
   end
 end
 
+(** Return structured global-context assumptions for one absolute declaration.
+    Unlike [Print Assumptions], this protocol never exposes pretty-printed
+    feedback as semantic data. *)
+module Assumptions = struct
+  let method_ = "petanque/assumptions"
+
+  module Params = struct
+    type t =
+      { st : int
+      ; qualified_path : string list
+      }
+    [@@deriving yojson]
+  end
+
+  module Response = struct
+    type t = Assumption.report [@@deriving yojson]
+  end
+
+  module Handler = struct
+    module Params = struct
+      type t =
+        { st : State.t
+        ; qualified_path : string list
+        }
+      [@@deriving yojson]
+    end
+
+    module Response = Response
+
+    let handler =
+      HType.Immediate
+        (fun ~token { Params.st; qualified_path } ->
+          Agent.assumptions ~token ~st ~qualified_path)
+  end
+end
+
 (* StateEqual *)
 module StateEqual = struct
   let method_ = "petanque/state/eq"

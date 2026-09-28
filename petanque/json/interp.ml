@@ -83,6 +83,8 @@ let handle_request ~(do_handle : 'a handle) ~unhandled ~token ~method_ ~params =
     do_handle ~token (do_request (module Goals) ~params)
   | s when String.equal Premises.method_ s ->
     do_handle ~token (do_request (module Premises) ~params)
+  | s when String.equal Assumptions.method_ s ->
+    do_handle ~token (do_request (module Assumptions) ~params)
   | s when String.equal StateEqual.method_ s ->
     do_handle ~token (do_request (module StateEqual) ~params)
   | s when String.equal StateHash.method_ s ->

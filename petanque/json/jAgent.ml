@@ -57,6 +57,35 @@ module Premise = struct
   type t = [%import: Petanque.Agent.Premise.t] [@@deriving yojson]
 end
 
+module Assumption = struct
+  type kind = [%import: Petanque.Agent.Assumption.kind]
+
+  let kind_to_yojson = function
+    | Axiom -> `String "axiom"
+    | Positive -> `String "positive"
+    | Guarded -> `String "guarded"
+    | Type_in_type -> `String "type_in_type"
+    | Uip -> `String "uip"
+    | Section_variable -> `String "section_variable"
+    | Opaque -> `String "opaque"
+    | Transparent -> `String "transparent"
+
+  let kind_of_yojson = function
+    | `String "axiom" -> Ok Axiom
+    | `String "positive" -> Ok Positive
+    | `String "guarded" -> Ok Guarded
+    | `String "type_in_type" -> Ok Type_in_type
+    | `String "uip" -> Ok Uip
+    | `String "section_variable" -> Ok Section_variable
+    | `String "opaque" -> Ok Opaque
+    | `String "transparent" -> Ok Transparent
+    | _ -> Error "invalid assumption kind"
+
+  type t = [%import: Petanque.Agent.Assumption.t] [@@deriving yojson]
+  type theory = [%import: Petanque.Agent.Assumption.theory] [@@deriving yojson]
+  type report = [%import: Petanque.Agent.Assumption.report] [@@deriving yojson]
+end
+
 module Proof_info = struct
   type t = [%import: Petanque.Agent.Proof_info.t] [@@deriving yojson]
 end

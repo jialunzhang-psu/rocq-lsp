@@ -165,8 +165,8 @@ val goals :
   -> unit
   -> (string, string) Coq.Goals.reified option R.t
 
-(** PET-owned caches of source and [.glob] file contents.  A workspace
-    refresh must clear them after build/source mutation. *)
+(** PET-owned caches of source and [.glob] file contents. A workspace refresh
+    must clear them after build/source mutation. *)
 module Memo : sig
   val clear : unit -> unit
 end
@@ -194,6 +194,49 @@ end
     now we just return their fully qualified name, but more options are of
     course possible. *)
 val premises : token:Coq.Limits.Token.t -> st:State.t -> Premise.t list R.t
+
+module Assumption : sig
+  (** Semantic class of a dependency returned by Rocq's assumptions engine. Only
+      [Axiom] denotes an ordinary constant declaration. *)
+  type kind =
+    | Axiom
+    | Positive
+    | Guarded
+    | Type_in_type
+    | Uip
+    | Section_variable
+    | Opaque
+    | Transparent
+
+  type t =
+    { kind : kind
+    ; qualified_path : string list
+          (** Absolute Rocq name components; a section variable has one
+              component. *)
+    }
+
+  type theory =
+    { rewrite_rules : bool
+    ; impredicative_set : bool
+    ; type_in_type : bool
+    }
+
+  type report =
+    { assumptions : t list
+    ; theory : theory
+    }
+end
+
+(** [assumptions ~token ~st ~qualified_path] computes the global-context
+    dependencies of exactly one absolute declaration in [st]. The result is
+    structural and independent of Rocq pretty-printing width. Invalid or unknown
+    path components return a Rocq request error. The call can force opaque
+    proofs from disk but does not mutate or export a new state. *)
+val assumptions :
+     token:Coq.Limits.Token.t
+  -> st:State.t
+  -> qualified_path:string list
+  -> Assumption.report R.t
 
 (** List all notations present is some lemma statement [statement], parsed at
     state [st]. Returns [[]] on EOF. *)

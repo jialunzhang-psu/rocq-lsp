@@ -79,10 +79,10 @@ module TableOfContents = struct
   end
 end
 
-(** [document_declarations { uri } ] returns the declarations represented by
-    the checked document.  Unlike the historical leaf-keyed [toc] map, this
-    response is an ordered list and therefore preserves duplicate leaves in
-    distinct module paths. *)
+(** [document_declarations { uri } ] returns the declarations represented by the
+    checked document. Unlike the historical leaf-keyed [toc] map, this response
+    is an ordered list and therefore preserves duplicate leaves in distinct
+    module paths. *)
 module DocumentDeclarations = struct
   let method_ = "petanque/document_declarations"
 
@@ -137,7 +137,7 @@ module InsertionPoint = struct
 end
 
 (** A fail-fast description of the non-stock lifecycle operations required by
-    the Rocq MCP wrapper.  Capability names are stable protocol tokens. *)
+    the Rocq MCP wrapper. Capability names are stable protocol tokens. *)
 module Capabilities = struct
   let method_ = "petanque/capabilities"
 
@@ -164,6 +164,7 @@ module Capabilities = struct
             ; "release_states_v1"
             ; "refresh_workspace_v1"
             ; "state_count_v1"
+            ; "structured_assumptions_v1"
             ])
   end
 end

@@ -53,6 +53,7 @@ let run (ic, oc) =
     ; "release_states_v1"
     ; "refresh_workspace_v1"
     ; "state_count_v1"
+    ; "structured_assumptions_v1"
     ];
   let* declarations = S.document_declarations { uri } in
   let compilation_unit = [ "Injected"; "document_declarations" ] in
@@ -67,6 +68,12 @@ let run (ic, oc) =
     ; (q [ "B"; "same" ], "Fact", true)
     ; (q [ "section_leaf" ], "Remark", true)
     ; (q [ "permitted_axiom" ], "Axiom", true)
+    ; ( q
+          [ "dependency_with_a_name_long_enough_to_wrap_in_human_readable_output"
+          ]
+      , "Axiom"
+      , true )
+    ; (q [ "uses_long_dependency" ], "Theorem", true)
     ; (q [ "admitted_leaf" ], "Theorem", false)
     ; (q [ "aborted_leaf" ], "Theorem", false)
     ]
@@ -82,8 +89,8 @@ let run (ic, oc) =
   if actual <> expected then
     List.iter
       (fun (path, kind, finished) ->
-        Format.eprintf "actual declaration: %s %s %b@."
-          (String.concat "." path) kind finished)
+        Format.eprintf "actual declaration: %s %s %b@." (String.concat "." path)
+          kind finished)
       actual;
   assert (actual = expected);
   let mutual =
@@ -96,9 +103,9 @@ let run (ic, oc) =
   in
   (match mutual with
   | [ first; second ] ->
-    (* One Rocq command can introduce distinct constants. PET must preserve
-       the shared range so publication wrappers can reject partial replacement
-       of that command rather than guessing from the leaf identities. *)
+    (* One Rocq command can introduce distinct constants. PET must preserve the
+       shared range so publication wrappers can reject partial replacement of
+       that command rather than guessing from the leaf identities. *)
     assert (first.declaration_range = second.declaration_range)
   | _ -> assert false);
   let source = read_file file in
@@ -119,7 +126,42 @@ let run (ic, oc) =
       assert (String.equal declaration.statement normalized))
     declarations;
   let* insertion = S.insertion_point { uri; modules = [ "A"; "Inner" ] } in
-  assert (String.starts_with ~prefix:"End Inner." (String.sub source insertion 10));
+  assert (
+    String.starts_with ~prefix:"End Inner." (String.sub source insertion 10));
+
+  (* Assumption identities cross the protocol as name components, never as
+     width-sensitive [Print Assumptions] or [Locate] feedback. *)
+  let eof_line = List.length (String.split_on_char '\n' source) - 1 in
+  let eof_position =
+    Lang.Point.{ line = eof_line; character = 0; offset = -1 }
+  in
+  let* final_state =
+    S.get_state_at_pos { uri; opts = None; position = eof_position }
+  in
+  let* closed =
+    S.assumptions { st = final_state.st; qualified_path = q [ "top" ] }
+  in
+  assert (closed.assumptions = []);
+  assert (not closed.theory.rewrite_rules);
+  assert (not closed.theory.impredicative_set);
+  assert (not closed.theory.type_in_type);
+  let* long =
+    S.assumptions
+      { st = final_state.st; qualified_path = q [ "uses_long_dependency" ] }
+  in
+  (match long.assumptions with
+  | [ { Petanque.Agent.Assumption.kind = Petanque.Agent.Assumption.Axiom
+      ; qualified_path
+      }
+    ] ->
+    assert (
+      qualified_path
+      = q
+          [ "dependency_with_a_name_long_enough_to_wrap_in_human_readable_output"
+          ])
+  | _ -> assert false);
+  let* released_final = S.release_states { states = [ final_state.st ] } in
+  assert (released_final.released = [ final_state.st ]);
 
   (* Exact release is idempotent and non-cascading. *)
   let position = Lang.Point.{ line = 2; character = 0; offset = -1 } in
@@ -142,7 +184,7 @@ let run (ic, oc) =
   assert (count_after_release = 0);
 
   (* A failed multi-sentence run must not export its successfully evaluated
-     prefix.  Repeated allocate/release cycles must return to the same count. *)
+     prefix. Repeated allocate/release cycles must return to the same count. *)
   let* base = S.get_state_at_pos { uri; opts = None; position } in
   let* before_rejection = S.state_count { marker = None } in
   assert (before_rejection = 1);
@@ -179,7 +221,9 @@ let run (ic, oc) =
   (* Refresh retains the process connection, invalidates every old ID, and
      forces the next document request to read the modified source. *)
   let* old_state = S.get_state_at_pos { uri; opts = None; position } in
-  let refresh_file = Filename.concat (Sys.getcwd ()) "refresh_workspace_runtime.v" in
+  let refresh_file =
+    Filename.concat (Sys.getcwd ()) "refresh_workspace_runtime.v"
+  in
   let refresh_uri =
     Lang.LUri.of_string refresh_file |> Lang.LUri.File.of_uri |> Result.get_ok
   in
@@ -193,13 +237,13 @@ let run (ic, oc) =
   | Error _ -> ()
   | Ok _ -> assert false);
   let* after_refresh = S.document_declarations { uri = refresh_uri } in
-  assert
-    (List.exists
-       (fun (declaration : Document_declaration.t) ->
-         List.hd (List.rev declaration.qualified_path) = refreshed_name)
-       after_refresh);
+  assert (
+    List.exists
+      (fun (declaration : Document_declaration.t) ->
+        List.hd (List.rev declaration.qualified_path) = refreshed_name)
+      after_refresh);
   let* post_refresh_state = S.get_state_at_pos { uri; opts = None; position } in
-  (* [Obj_map.clear] keeps its monotonic allocator.  A greater ID therefore
+  (* [Obj_map.clear] keeps its monotonic allocator. A greater ID therefore
      proves that normal refresh retained this exact PET process. *)
   assert (post_refresh_state.st > old_state.st);
   let* post_refresh_release =
@@ -209,7 +253,7 @@ let run (ic, oc) =
   Sys.remove refresh_file;
   let* () = S.refresh_workspace { marker = None } in
 
-  (* PET's [.glob] memo is independently invalidated.  Change only the
+  (* PET's [.glob] memo is independently invalidated. Change only the
      declaration offset in the compiled dependency's glob file and observe it
      through a fresh post-refresh premise query. *)
   let dependency = "refresh_dependency.v" in
@@ -222,10 +266,9 @@ let run (ic, oc) =
   write_file dependency "Definition refreshed_value : nat := 1.\n";
   compile_injected dependency;
   write_file consumer
-    "From Injected Require Import refresh_dependency.\nTheorem refresh_consumer : refreshed_value = 1. reflexivity. Qed.\n";
-  let consumer_position =
-    Lang.Point.{ line = 2; character = 0; offset = -1 }
-  in
+    "From Injected Require Import refresh_dependency.\n\
+     Theorem refresh_consumer : refreshed_value = 1. reflexivity. Qed.\n";
+  let consumer_position = Lang.Point.{ line = 2; character = 0; offset = -1 } in
   let premise_offset premises =
     List.find_map
       (fun { Petanque.Agent.Premise.full_name; file = _; info } ->
@@ -269,8 +312,8 @@ let run (ic, oc) =
   assert (released_consumer.released = [ refreshed_consumer_state.st ]);
 
   (* Changing and recompiling a dependency must invalidate the old [.vo]
-     environment.  The unchanged consumer is valid against value [1], but it
-     must fail after refresh exposes the rebuilt value [2]. *)
+     environment. The unchanged consumer is valid against value [1], but it must
+     fail after refresh exposes the rebuilt value [2]. *)
   write_file dependency "Definition refreshed_value : nat := 2.\n";
   compile_injected dependency;
   let* _cached_consumer = S.document_declarations { uri = consumer_uri } in
@@ -279,7 +322,8 @@ let run (ic, oc) =
   | Error _ -> ()
   | Ok _ -> assert false);
   write_file consumer
-    "From Injected Require Import refresh_dependency.\nTheorem refresh_consumer : refreshed_value = 2. reflexivity. Qed.\n";
+    "From Injected Require Import refresh_dependency.\n\
+     Theorem refresh_consumer : refreshed_value = 2. reflexivity. Qed.\n";
   let* () = S.refresh_workspace { marker = None } in
   let* repaired_consumer = S.document_declarations { uri = consumer_uri } in
   assert (List.length repaired_consumer = 1);

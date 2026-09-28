@@ -28,8 +28,8 @@ module S (C : Chans) : sig
     TableOfContents.Params.t -> (TableOfContents.Response.t, string) result
 
   val document_declarations :
-    DocumentDeclarations.Params.t ->
-    (DocumentDeclarations.Response.t, string) result
+       DocumentDeclarations.Params.t
+    -> (DocumentDeclarations.Response.t, string) result
 
   val insertion_point :
     InsertionPoint.Params.t -> (InsertionPoint.Response.t, string) result
@@ -57,6 +57,9 @@ module S (C : Chans) : sig
   val run_at_pos : RunAtPoint.Params.t -> (RunAtPoint.Response.t, string) result
   val goals : Goals.Params.t -> (Goals.Response.t, string) result
   val premises : Premises.Params.t -> (Premises.Response.t, string) result
+
+  val assumptions :
+    Assumptions.Params.t -> (Assumptions.Response.t, string) result
 
   val state_equal :
     StateEqual.Params.t -> (StateEqual.Response.t, string) result

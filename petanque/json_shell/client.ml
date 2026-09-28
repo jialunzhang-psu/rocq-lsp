@@ -144,6 +144,10 @@ module S (C : Chans) = struct
     let module M = Wrap (Premises) (C) in
     M.call
 
+  let assumptions =
+    let module M = Wrap (Assumptions) (C) in
+    M.call
+
   let state_equal =
     let module M = Wrap (StateEqual) (C) in
     M.call
