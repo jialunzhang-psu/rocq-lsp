@@ -139,28 +139,39 @@ let execute_precommands ~token ~memo ~pre_commands ~(node : Fleche.Doc.Node.t) =
     Fleche.Memo.Interp.eval ~token (st, ast.v)
   | _, _, _ -> Coq.Protect.E.ok node.state
 
-(* XXX Fix better by making protect errors and request errors share the loc
-   type, so we can execute with Coq locations *)
-let clean_fb fbs =
+(* Keep Rocq's source range when crossing the JSON boundary.  The old adapter
+   erased every range, which forced callers to bisect an atomic multi-sentence
+   fragment just to find the failing command. *)
+let clean_fb ~lines fbs =
   List.map
-    (fun (lvl, { Coq.Message.Payload.msg; _ }) ->
-      (lvl, { Coq.Message.Payload.range = None; quickFix = None; msg }))
+    (fun (lvl, { Coq.Message.Payload.range; msg; _ }) ->
+      let range = Option.map (Coq.Utils.to_range ~lines) range in
+      (lvl, { Coq.Message.Payload.range; quickFix = None; msg }))
     fbs
 
-let protect_to_result (r : _ Coq.Protect.E.t) : (_, _) Result.t =
+let with_primary_range ~lines ~range ~msg feedback =
+  let feedback = clean_fb ~lines feedback in
+  match range with
+  | None -> feedback
+  | Some range ->
+    let range = Coq.Utils.to_range ~lines range in
+    let primary = (1, Coq.Message.Payload.make ~range msg) in
+    primary :: feedback
+
+let protect_to_result ?(lines = [||]) (r : _ Coq.Protect.E.t) : (_, _) Result.t =
   match r with
   | { r = Interrupted; feedback } ->
-    let feedback = clean_fb feedback in
+    let feedback = clean_fb ~lines feedback in
     Error Error.(make Interrupted ~feedback)
-  | { r = Completed (Error (User { msg; _ })); feedback } ->
-    let feedback = clean_fb feedback in
+  | { r = Completed (Error (User { msg; range; _ })); feedback } ->
+    let feedback = with_primary_range ~lines ~range ~msg feedback in
     Error Error.(make (Coq (Coq.Pp_t.to_string msg)) ~feedback)
-  | { r = Completed (Error (Reference_not_found { msg; _ })); feedback } ->
-    let feedback = clean_fb feedback in
+  | { r = Completed (Error (Reference_not_found { msg; range; _ })); feedback } ->
+    let feedback = with_primary_range ~lines ~range ~msg feedback in
     Error
       Error.(make (Reference_not_found (Coq.Pp_t.to_string msg)) ~feedback)
-  | { r = Completed (Error (Anomaly { msg; _ })); feedback } ->
-    let feedback = clean_fb feedback in
+  | { r = Completed (Error (Anomaly { msg; range; _ })); feedback } ->
+    let feedback = with_primary_range ~lines ~range ~msg feedback in
     Error Error.(make (Anomaly (Coq.Pp_t.to_string msg)) ~feedback)
   | { r = Completed (Ok r); feedback } -> Ok (r feedback)
 
@@ -237,7 +248,7 @@ let start ~token ~doc ?opts ?pre_commands ~thm () =
     (* Note this runs on the resulting state, anyways it is purely functional *)
     analyze_after_run ~hash st
   in
-  protect_to_result execution
+  protect_to_result ~lines:(Fleche.Doc.lines doc) execution
 
 let run ~token ?opts ~st ~tac () : (_ Run_result.t, Error.t) Request.R.t =
   let opts = default_opts opts in
@@ -249,7 +260,8 @@ let run ~token ?opts ~st ~tac () : (_ Run_result.t, Error.t) Request.R.t =
     (* Note this runs on the resulting state, anyways it is purely functional *)
     analyze_after_run ~hash st
   in
-  protect_to_result execution
+  let lines = String.split_on_char '\n' tac |> Array.of_list in
+  protect_to_result ~lines execution
 
 (* Use a trans *)
 let run_at_pos ~token ?opts ~doc ~point ~command () :

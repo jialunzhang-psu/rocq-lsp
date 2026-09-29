@@ -153,6 +153,24 @@ let reference_not_found_test ~token ~doc =
       (Agent.Error.make_request
          (System "missing Search reference unexpectedly succeeded"))
 
+let fragment_range_test ~token ~doc =
+  let open Coq.Compat.Result.O in
+  let* { st; _ } = Agent.start ~token ~doc ~thm:"rev_snoc_cons" () in
+  let fragment = "idtac \"🦀\". nonsense." in
+  match Agent.run ~token ~st ~tac:fragment () with
+  | Error Request.Error.{ feedback; _ } ->
+    let _, { Coq.Message.Payload.range; _ } = List.hd feedback in
+    let { Lang.Range.start; end_ } = Option.get range in
+    (* Offsets are UTF-8 bytes in the exact caller fragment.  The crab is
+       four bytes, so the failing identifier begins at byte 14, not 11. *)
+    assert (Int.equal start.offset 14);
+    assert (Int.equal end_.offset 22);
+    Ok None
+  | Ok _ ->
+    Error
+      (Agent.Error.make_request
+         (System "invalid multi-sentence fragment unexpectedly succeeded"))
+
 let main () =
   let open Coq.Compat.Result.O in
   let token = Coq.Limits.create_atomic () in
@@ -164,7 +182,8 @@ let main () =
   let* g5 = run_at_pos_test ~token ~doc in
   let* g6 = get_proof_test ~token ~doc in
   let* g7 = reference_not_found_test ~token ~doc in
-  Ok [ g1; g2; g3; g4; g5; g6; g7 ]
+  let* g8 = fragment_range_test ~token ~doc in
+  Ok [ g1; g2; g3; g4; g5; g6; g7; g8 ]
 
 let max = List.fold_left max min_int
 

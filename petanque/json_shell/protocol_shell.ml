@@ -166,6 +166,7 @@ module Capabilities = struct
             ; "state_count_v1"
             ; "structured_assumptions_v1"
             ; "typed_errors_v1"
+            ; "diagnostic_ranges_v1"
             ])
   end
 end

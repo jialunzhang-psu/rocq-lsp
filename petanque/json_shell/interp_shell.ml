@@ -21,10 +21,25 @@ let do_handle ~fn ~token action =
     handler ~token ~doc ~point
 
 (* Duplicate with lsp_core *)
-let feedback_to_message fb =
-  Lsp.JFleche.Message.(
-    of_coq_message fb |> map ~f:Pp.string_of_ppcmds
-    |> to_yojson (fun s -> `String s))
+let feedback_to_message (level, { Coq.Message.Payload.range; msg; _ }) =
+  let point ({ line; character; offset } : Lsp.JLang.Point.t) =
+    `Assoc
+      [ ("line", `Int line)
+      ; ("character", `Int character)
+      ; ("offset", `Int offset)
+      ]
+  in
+  let range =
+    match range with
+    | None -> `Null
+    | Some ({ start; end_ } : Lsp.JLang.Range.t) ->
+      `Assoc [("start", point start); ("end", point end_)]
+  in
+  `Assoc
+    [ ("range", range)
+    ; ("level", `Int level)
+    ; ("text", `String (Pp.string_of_ppcmds msg))
+    ]
 
 let feedback_to_data fbs =
   match fbs with
