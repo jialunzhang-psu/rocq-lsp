@@ -132,6 +132,10 @@ module S (C : Chans) = struct
     let module M = Wrap (RunTac) (C) in
     M.call
 
+  let run_trace =
+    let module M = Wrap (RunTrace) (C) in
+    M.call
+
   let run_at_pos =
     let module M = Wrap (RunAtPoint) (C) in
     M.call

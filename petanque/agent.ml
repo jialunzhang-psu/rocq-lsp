@@ -263,6 +263,155 @@ let run ~token ?opts ~st ~tac () : (_ Run_result.t, Error.t) Request.R.t =
   let lines = String.split_on_char '\n' tac |> Array.of_list in
   protect_to_result ~lines execution
 
+module Run_trace = struct
+  type step =
+    { sentence_index : int
+    ; byte_start : int
+    ; byte_end : int
+    ; command : string
+    }
+
+  type failure =
+    { code : int
+    ; message : string
+    ; sentence_index : int
+    ; sentence_start : int
+    ; sentence_end : int
+    ; diagnostic_start : int option
+    ; diagnostic_end : int option
+    ; before : State.t
+    ; trace : step list
+    }
+
+  type 'a t =
+    { st : 'a option
+    ; proof_finished : bool
+    ; failure : failure option
+    }
+end
+
+let clamp_offset text offset = Stdlib.max 0 (Stdlib.min (String.length text) offset)
+
+let offsets_of_loc text (loc : Coq.Loc_t.t) =
+  let start = clamp_offset text loc.bp in
+  let end_ = clamp_offset text loc.ep in
+  if start <= end_ then (start, end_) else (end_, start)
+
+let bounded_command text start end_ =
+  let length = Stdlib.min 4096 (end_ - start) in
+  if length <= 0 then "" else String.sub text start length
+
+(* Keep the failing sentence in a bounded trace even after a long successful
+   prefix.  [steps] is newest-first, so when the cap is exceeded we drop the
+   oldest item and retain the latest 64 parser commands. *)
+let push_trace_step step steps =
+  let steps = step :: steps in
+  if List.length steps <= 64 then steps
+  else List.rev steps |> List.tl |> List.rev
+
+let trace_error = function
+  | Coq.Protect.R.Interrupted -> Some (Error.Interrupted, None)
+  | Completed (Error (User { msg; range; _ })) ->
+    Some (Error.Coq (Coq.Pp_t.to_string msg), range)
+  | Completed (Error (Reference_not_found { msg; range; _ })) ->
+    Some (Error.Reference_not_found (Coq.Pp_t.to_string msg), range)
+  | Completed (Error (Anomaly { msg; range; _ })) ->
+    Some (Error.Anomaly (Coq.Pp_t.to_string msg), range)
+  | Completed (Ok _) -> None
+
+let run_trace ~token ?opts ~st ~tac ~include_trace () :
+    (_ Run_trace.t, Error.t) Request.R.t =
+  let opts = default_opts opts in
+  let memo, hash = (opts.memo, opts.hash) in
+  let stream = Coq.Parsing.Stream.of_string tac in
+  let parsable = Coq.Parsing.Parsable.make stream in
+  let eval =
+    if memo then Fleche.Memo.Interp.eval
+    else
+      fun ~token (st, ast) ->
+        Coq.Interp.interp ~token ~intern:Vernacinterp.fs_intern ~st ast
+  in
+  let failure ~before ~sentence_index ~sentence_start ~sentence_end ~steps
+      (error, diagnostic) =
+    let diagnostic_start, diagnostic_end =
+      match diagnostic with
+      | None -> (None, None)
+      | Some loc ->
+        let start, end_ = offsets_of_loc tac loc in
+        (Some start, Some end_)
+    in
+    let trace = if include_trace then List.rev steps else [] in
+    Run_trace.
+      { st = None
+      ; proof_finished = false
+      ; failure =
+          Some
+            { code = Error.to_code error
+            ; message = Error.to_string error
+            ; sentence_index
+            ; sentence_start
+            ; sentence_end
+            ; diagnostic_start
+            ; diagnostic_end
+            ; before
+            ; trace
+            }
+      }
+  in
+  let rec loop state sentence_index steps =
+    let parsed = Coq.Parsing.parse ~token ~st:state parsable in
+    match parsed.r with
+    | Interrupted | Completed (Error _) ->
+      let error = Option.get (trace_error parsed.r) in
+      let diagnostic = snd error in
+      let sentence_start, sentence_end =
+        match diagnostic with
+        | Some loc -> offsets_of_loc tac loc
+        | None -> (String.length tac, String.length tac)
+      in
+      Coq.Protect.E.ok
+        (failure ~before:state ~sentence_index ~sentence_start ~sentence_end
+           ~steps error)
+    | Completed (Ok None) ->
+      let analyzed = analyze_after_run ~hash state [] in
+      Coq.Protect.E.ok
+        Run_trace.
+          { st = Some analyzed.st
+          ; proof_finished = analyzed.proof_finished
+          ; failure = None
+          }
+    | Completed (Ok (Some ast)) ->
+      let sentence_start, sentence_end =
+        match Coq.Ast.loc ast with
+        | Some loc -> offsets_of_loc tac loc
+        | None -> (0, String.length tac)
+      in
+      let step =
+        Run_trace.
+          { sentence_index
+          ; byte_start = sentence_start
+          ; byte_end = sentence_end
+          ; command = bounded_command tac sentence_start sentence_end
+          }
+      in
+      let executed = eval ~token (state, ast) in
+      (match executed.r with
+      | Interrupted | Completed (Error _) ->
+        let error = Option.get (trace_error executed.r) in
+        let steps = if include_trace then push_trace_step step steps else steps in
+        Coq.Protect.E.ok
+          (failure ~before:state ~sentence_index ~sentence_start ~sentence_end
+             ~steps error)
+      | Completed (Ok next) ->
+        let steps =
+          if include_trace then push_trace_step step steps else steps
+        in
+        loop next (sentence_index + 1) steps)
+  in
+  Coq.State.in_stateM ~token ~st ~f:(fun state -> loop state 0 []) st
+  |> Coq.Protect.E.map ~f:(fun result _feedback -> result)
+  |> protect_to_result
+
 (* Use a trans *)
 let run_at_pos ~token ?opts ~doc ~point ~command () :
     (_ Run_result.t, Error.t) Request.R.t =

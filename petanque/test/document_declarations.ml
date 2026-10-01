@@ -56,6 +56,7 @@ let run (ic, oc) =
     ; "structured_assumptions_v1"
     ; "typed_errors_v1"
     ; "diagnostic_ranges_v1"
+    ; "traced_run_v1"
     ];
   let* declarations = S.document_declarations { uri } in
   let compilation_unit = [ "Injected"; "document_declarations" ] in

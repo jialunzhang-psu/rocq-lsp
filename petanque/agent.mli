@@ -142,6 +142,52 @@ val run :
   -> unit
   -> State.t Run_result.t R.t
 
+module Run_trace : sig
+  (** One sentence boundary produced by Rocq's parser.  Offsets are half-open
+      bytes in the submitted fragment; [command] is bounded presentation data. *)
+  type step =
+    { sentence_index : int
+    ; byte_start : int
+    ; byte_end : int
+    ; command : string
+    }
+
+  (** A semantic/parser failure together with the immutable state immediately
+      before the failing sentence.  [code]/[message] use PET's ordinary typed
+      error vocabulary, while the endpoint itself succeeds so this metadata is
+      not discarded by JSON-RPC error framing. *)
+  type failure =
+    { code : int
+    ; message : string
+    ; sentence_index : int
+    ; sentence_start : int
+    ; sentence_end : int
+    ; diagnostic_start : int option
+    ; diagnostic_end : int option
+    ; before : State.t
+    ; trace : step list
+    }
+
+  type 'a t =
+    { st : 'a option
+    ; proof_finished : bool
+    ; failure : failure option
+    }
+end
+
+(** Sentence-aware speculative execution.  Like [run], successful execution is
+    atomic from the caller's point of view.  A rejected fragment exports only a
+    read-only snapshot immediately before its failing command; the JSON client
+    must release that temporary state after reading goals. *)
+val run_trace :
+     token:Coq.Limits.Token.t
+  -> ?opts:Run_opts.t
+  -> st:State.t
+  -> tac:string
+  -> include_trace:bool
+  -> unit
+  -> State.t Run_trace.t R.t
+
 (** [run_at_pos ~token ?opts ~doc ~command] tries to run [command] at [doc]
     position [point]. [opts] controls several parameters of the Fleche execution
     engine. *)

@@ -215,6 +215,46 @@ module RunTac = struct
   end
 end
 
+(** Sentence-aware speculative execution used for rich atomic failure
+    diagnostics.  Command rejection is encoded in the successful response so
+    the pre-failure state and trace are not discarded by JSON-RPC framing. *)
+module RunTrace = struct
+  let method_ = "petanque/run_trace"
+
+  module Params = struct
+    type t =
+      { st : int
+      ; tac : string
+      ; include_trace : bool [@default false]
+      }
+    [@@deriving yojson]
+  end
+
+  module Response = struct
+    type t = int Run_trace.t [@@deriving yojson]
+  end
+
+  module Handler = struct
+    module Params = struct
+      type t =
+        { st : State.t
+        ; tac : string
+        ; include_trace : bool [@default false]
+        }
+      [@@deriving yojson]
+    end
+
+    module Response = struct
+      type t = State.t Run_trace.t [@@deriving yojson]
+    end
+
+    let handler =
+      HType.Immediate
+        (fun ~token { Params.st; tac; include_trace } ->
+          Agent.run_trace ~token ~st ~tac ~include_trace ())
+  end
+end
+
 (* run_tac RPC *)
 module RunAtPoint = struct
   let method_ = "petanque/run_at_point"

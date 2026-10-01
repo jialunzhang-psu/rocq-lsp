@@ -171,6 +171,32 @@ let fragment_range_test ~token ~doc =
       (Agent.Error.make_request
          (System "invalid multi-sentence fragment unexpectedly succeeded"))
 
+let run_trace_test ~token ~doc =
+  let open Coq.Compat.Result.O in
+  let* { st; _ } = Agent.start ~token ~doc ~thm:"rev_snoc_cons" () in
+  let fragment = "idtac \"a.b.\". (* c.d. *) idtac. nonsense." in
+  let* result =
+    Agent.run_trace ~token ~st ~tac:fragment ~include_trace:true ()
+  in
+  let failure = Option.get result.failure in
+  assert (Option.is_empty result.st);
+  assert (not result.proof_finished);
+  assert (Int.equal failure.sentence_index 2);
+  assert (Int.equal (List.length failure.trace) 3);
+  let first = List.nth failure.trace 0 in
+  let second = List.nth failure.trace 1 in
+  let third = List.nth failure.trace 2 in
+  assert (String.equal first.command "idtac \"a.b.\".");
+  assert (String.equal second.command "idtac.");
+  assert (String.equal third.command "nonsense.");
+  let* before = Agent.goals ~token ~st:failure.before () in
+  assert (not (Option.is_empty before));
+  let* without_trace =
+    Agent.run_trace ~token ~st ~tac:fragment ~include_trace:false ()
+  in
+  assert (List.is_empty (Option.get without_trace.failure).trace);
+  Ok None
+
 let main () =
   let open Coq.Compat.Result.O in
   let token = Coq.Limits.create_atomic () in
@@ -183,7 +209,8 @@ let main () =
   let* g6 = get_proof_test ~token ~doc in
   let* g7 = reference_not_found_test ~token ~doc in
   let* g8 = fragment_range_test ~token ~doc in
-  Ok [ g1; g2; g3; g4; g5; g6; g7; g8 ]
+  let* g9 = run_trace_test ~token ~doc in
+  Ok [ g1; g2; g3; g4; g5; g6; g7; g8; g9 ]
 
 let max = List.fold_left max min_int
 
